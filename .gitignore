@@ -1,0 +1,8 @@
+# IDE
+.bsp/
+.idea/
+
+# SBT
+project/target/
+project/project/
+target/
