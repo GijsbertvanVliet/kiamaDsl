@@ -21,7 +21,6 @@ class PrettyPrinter extends org.bitbucket.inkytonik.kiama.output.PrettyPrinter {
     case StringType                                          => "String"
     case IntegerType                                         => "Int"
     case VariableAssignmentStatement(dataType, varName, exp) => "val" <+> varName <> ":" <+> toDoc(dataType) <+> "=" <+> toDoc(exp) <> ";"
-    case CompoundStatement(statements)                       => group(braces(nest(line <@@> ssep(statements.map(toDoc), line)) <@@> line))
     case Return(exp)                                         => "return" <+> toDoc(exp) <> ";"
     case InputArgument(dataType, varName)                    => value(varName) <> ":" <+> toDoc(dataType)
     case Root(inputArguments, statements, returnStatement) =>

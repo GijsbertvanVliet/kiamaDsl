@@ -7,7 +7,7 @@ class SyntaxAnalyser(positions: Positions) extends Parsers(positions) {
   import MyTree._
 
   lazy val rootParser: Parser[Root] =
-    "root" ~> ("(" ~> repsep(inputArgument, ",") <~ ")") ~ ("{" ~> rep(statement) ~ returnStatement <~ "}") ^^ {
+    "root" ~> ("(" ~> repsep(inputArgument, ",") <~ ")") ~ ("{" ~> rep(varAssignmentStatement) ~ returnStatement <~ "}") ^^ {
       case capturedInputArguments ~ (capturedStatements ~ capturedReturn) =>
         Root.apply(capturedInputArguments, capturedStatements, capturedReturn)
     }
@@ -17,14 +17,8 @@ class SyntaxAnalyser(positions: Positions) extends Parsers(positions) {
       InputArgument.apply(capturedDataType, capturedId)
     }
 
-  lazy val statement: Parser[Statement] =
-    compoundStatement | varAssignmentStatement
-
   lazy val returnStatement: Parser[Return] =
     "return" ~> exp <~ ";" ^^ Return.apply
-
-  lazy val compoundStatement: Parser[CompoundStatement] =
-    "{" ~> rep(varAssignmentStatement) <~ "}" ^^ CompoundStatement.apply
 
   lazy val varAssignmentStatement: Parser[VariableAssignmentStatement] =
     "val" ~> id ~ ((":" ~> dataType <~ "=") ~ exp <~ ";") ^^ { case capturedId ~ (capturedDataType ~ capturedExpression) =>
@@ -33,8 +27,8 @@ class SyntaxAnalyser(positions: Positions) extends Parsers(positions) {
 
   lazy val exp: PackratParser[Expression] =
     exp ~ ("+" ~> factor) ^^ AddExpression.apply |
-      exp ~ ("-" ~> factor) ^^ SubExpression.apply |
-      factor
+    exp ~ ("-" ~> factor) ^^ SubExpression.apply |
+    factor
 
   lazy val factor: Parser[Expression] =
     localVariable | intLiteral | stringLiteral | "-" ~> exp ^^ (expression => NegateExpression(expression)) | "(" ~> exp <~ ")"
@@ -60,4 +54,3 @@ class SyntaxAnalyser(positions: Positions) extends Parsers(positions) {
     "Int".r ^^ (_ => IntegerType)
 
 }
-

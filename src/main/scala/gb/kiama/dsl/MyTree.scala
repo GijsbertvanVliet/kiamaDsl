@@ -96,9 +96,8 @@ object MyTree {
 
   sealed trait Statement extends TreeNode
   case class VariableAssignmentStatement(override val dataType: DataType, override val variableName: String, exp: Expression)
-    extends VariableAssignment(dataType, variableName)
+      extends VariableAssignment(dataType, variableName)
       with Statement
-  case class CompoundStatement(statements: Seq[Statement]) extends Statement
 
   case class Return(expression: Expression) extends Statement
 
