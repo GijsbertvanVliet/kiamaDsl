@@ -8,40 +8,6 @@ import org.scalatest.matchers.should.Matchers
 
 class Tests extends AnyFlatSpec with Matchers {
 
-  /**
-   * root(input: Int, secondInput: String) {
-   *    val a: String = "something"
-   *    val b: Int = 1 + -2
-   *    val c: String = a
-   *    val d: Int = secondInput;
-   *    return c + "hello" + input
-   * }
-   */
-
-  private val twoLiteral              = IntegerLiteralExpression(2)
-  private val unaryExpression         = NegateExpression(twoLiteral)
-  private val oneLiteral              = IntegerLiteralExpression(1)
-  private val integerBinaryExpression = AddExpression(oneLiteral, unaryExpression)
-  private val somethingLiteral        = StringLiteralExpression("something")
-  private val variableAssignmentA     = VariableAssignmentStatement(StringType, "a", somethingLiteral)
-  private val variableAssignmentB     = VariableAssignmentStatement(IntegerType, "b", integerBinaryExpression)
-  private val localVarRefToA          = LocalVariableReferenceExpression("a")
-  private val variableAssignmentC     = VariableAssignmentStatement(StringType, "c", localVarRefToA)
-  private val inputArgument1          = InputArgument(IntegerType, "input")
-  private val inputArgument2          = InputArgument(StringType, "secondInput")
-  private val localVarRefToC          = LocalVariableReferenceExpression("c")
-  private val cPlusHello              = AddExpression(localVarRefToC, StringLiteralExpression("hello"))
-  private val localVarRefToInput      = LocalVariableReferenceExpression("input")
-  private val stringBinaryExpression  = AddExpression(cPlusHello, localVarRefToInput)
-  private val secondInputReference    = LocalVariableReferenceExpression("secondInput")
-  private val variableAssignmentD     = VariableAssignmentStatement(IntegerType, "d", secondInputReference)
-  private val returnStatement         = Return(stringBinaryExpression)
-  private val root =
-    Root(Seq(inputArgument1, inputArgument2), Seq(variableAssignmentA, variableAssignmentB, variableAssignmentC, variableAssignmentD), returnStatement)
-  private val tree = new MyTree(root)
-
-  val treeManipulations: MyTreeManipulations = new MyTreeManipulations(tree)
-
   private val exampleDsl =
     """root(input: Int, secondInput: String) {
       |  val a: String = "something";
@@ -52,14 +18,34 @@ class Tests extends AnyFlatSpec with Matchers {
       |}
       |""".stripMargin
 
-  private def runTestOnRoot(unitTest: (Positions, Root) => Any, inputDsl: String = exampleDsl) = {
-    val positions = new Positions
+  val positions = new Positions
 
-    new SyntaxAnalyser(positions).rootParser(inputDsl) match {
-      case Success(result, _) => unitTest(positions, result)
-      case _                  => fail("failed to parse input")
+  private val root: Root =
+    new SyntaxAnalyser(positions).rootParser(exampleDsl) match {
+      case Success(result, _) => result
+      case _                  => throw new Exception("given dsl should be parseable")
     }
-  }
+
+  private val tree = new MyTree(root)
+
+  private val treeManipulations = new MyTreeManipulations(tree)
+
+  private val returnStatement         = root.returnStatement
+  private val variableAssignmentA     = root.statements.head.asInstanceOf[VariableAssignmentStatement]
+  private val variableAssignmentB     = root.statements(1).asInstanceOf[VariableAssignmentStatement]
+  private val variableAssignmentC     = root.statements(2).asInstanceOf[VariableAssignmentStatement]
+  private val variableAssignmentD     = root.statements(3).asInstanceOf[VariableAssignmentStatement]
+  private val integerBinaryExpression = variableAssignmentB.exp.asInstanceOf[AddExpression]
+  private val unaryExpression         = integerBinaryExpression.right.asInstanceOf[NegateExpression]
+  private val inputArgument1          = root.inputArguments.head
+  private val inputArgument2          = root.inputArguments(1)
+  private val localVarRefToA          = variableAssignmentC.exp.asInstanceOf[LocalVariableReferenceExpression]
+  private val oneLiteral              = integerBinaryExpression.left.asInstanceOf[IntegerLiteralExpression]
+  private val stringBinaryExpression  = returnStatement.expression.asInstanceOf[AddExpression]
+  private val cPlusHello              = stringBinaryExpression.left.asInstanceOf[AddExpression]
+  private val somethingLiteral        = variableAssignmentA.exp.asInstanceOf[StringLiteralExpression]
+  private val localVarRefToInput      = stringBinaryExpression.right.asInstanceOf[LocalVariableReferenceExpression]
+  private val localVarRefToC          = cPlusHello.left.asInstanceOf[LocalVariableReferenceExpression]
 
   private def runTestOnTree(unitTest: (Positions, MyTreeManipulations) => Any)(inputDsl: String = exampleDsl) = {
     val positions = new Positions
@@ -71,10 +57,6 @@ class Tests extends AnyFlatSpec with Matchers {
         unitTest(positions, manipulations)
       case _ => fail("failed to parse input")
     }
-  }
-
-  it should "parse text to tree object" in {
-    runTestOnRoot((_, parseResult) => parseResult shouldBe root)
   }
 
   it should "get all parents" in {
