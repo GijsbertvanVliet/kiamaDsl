@@ -1,6 +1,7 @@
 package gb.kiama.dsl
 
 import org.bitbucket.inkytonik.kiama.relation.Tree
+import org.bitbucket.inkytonik.kiama.util.Positions
 
 object MyTree {
 
@@ -18,15 +19,16 @@ object MyTree {
 
   sealed abstract class Expression extends TreeNode {
     def reduce: Expression = this
-    def getReturnType(localScope: Seq[VariableAssignment]): Either[ValidationMessages, DataType]
+    def getReturnType(localScope: Seq[VariableAssignment])(implicit position: Positions): Either[ValidationMessages, DataType]
+
   }
 
   sealed abstract class LiteralExpression[T](value: T) extends Expression
   case class IntegerLiteralExpression(value: Integer) extends LiteralExpression[Integer](value) {
-    override def getReturnType(localScope: Seq[VariableAssignment]): Either[ValidationMessages, DataType] = Right(IntegerType)
+    override def getReturnType(localScope: Seq[VariableAssignment])(implicit position: Positions): Either[ValidationMessages, DataType] = Right(IntegerType)
   }
   case class StringLiteralExpression(value: String) extends LiteralExpression[String](value) {
-    override def getReturnType(localScope: Seq[VariableAssignment]): Either[ValidationMessages, DataType] = Right(StringType)
+    override def getReturnType(localScope: Seq[VariableAssignment])(implicit position: Positions): Either[ValidationMessages, DataType] = Right(StringType)
   }
 
   sealed abstract class BinaryExpression(left: Expression, right: Expression) extends Expression
@@ -40,11 +42,11 @@ object MyTree {
       case _ => super.reduce
     }
 
-    override def getReturnType(localScope: Seq[VariableAssignment]): Either[ValidationMessages, DataType] =
+    override def getReturnType(localScope: Seq[VariableAssignment])(implicit position: Positions): Either[ValidationMessages, DataType] =
       (left.getReturnType(localScope), right.getReturnType(localScope)) match {
         case (Right(StringType), Right(StringType))    => Right(StringType)
         case (Right(IntegerType), Right(IntegerType))  => Right(IntegerType)
-        case (_ @Right(leftType), _ @Right(rightType)) => Left(ValidationMessages(s"Cannot add a $leftType to a $rightType"))
+        case (_ @Right(leftType), _ @Right(rightType)) => Left(ValidationMessages(s"Cannot add a $leftType to a $rightType", Error, this))
         case (leftResult, rightResult)                 => Left(returnTypeValidations(leftResult, rightResult))
 
       }
@@ -57,10 +59,10 @@ object MyTree {
       case _ => super.reduce
     }
 
-    override def getReturnType(localScope: Seq[VariableAssignment]): Either[ValidationMessages, DataType] =
+    override def getReturnType(localScope: Seq[VariableAssignment])(implicit position: Positions): Either[ValidationMessages, DataType] =
       (left.getReturnType(localScope), right.getReturnType(localScope)) match {
         case (Right(IntegerType), Right(IntegerType))  => Right(IntegerType)
-        case (_ @Right(leftType), _ @Right(rightType)) => Left(ValidationMessages(s"Cannot substract a $leftType to a $rightType."))
+        case (_ @Right(leftType), _ @Right(rightType)) => Left(ValidationMessages(s"Cannot substract a $leftType to a $rightType.", Error, this))
         case (leftResult, rightResult)                 => Left(returnTypeValidations(leftResult, rightResult))
       }
   }
@@ -72,18 +74,18 @@ object MyTree {
       case _                                    => super.reduce
     }
 
-    override def getReturnType(localScope: Seq[VariableAssignment]): Either[ValidationMessages, DataType] =
+    override def getReturnType(localScope: Seq[VariableAssignment])(implicit position: Positions): Either[ValidationMessages, DataType] =
       exp.getReturnType(localScope) match {
         case Right(IntegerType)                           => Right(IntegerType)
-        case Right(StringType)                            => Left(ValidationMessages("Not able to compute the negation of a string"))
+        case Right(StringType)                            => Left(ValidationMessages("Not able to compute the negation of a string", Error, this))
         case Left(validationMessages: ValidationMessages) => Left(validationMessages)
       }
   }
 
   case class LocalVariableReferenceExpression(referenceName: String) extends Expression {
-    override def getReturnType(localScope: Seq[VariableAssignment]): Either[ValidationMessages, DataType] =
+    override def getReturnType(localScope: Seq[VariableAssignment])(implicit position: Positions): Either[ValidationMessages, DataType] =
       localScope.find(_.variableName == referenceName) match {
-        case None                     => Left(ValidationMessages(s"There is no local variable with name $referenceName in scope"))
+        case None                     => Left(ValidationMessages(s"There is no local variable with name $referenceName in scope", Error, this))
         case Some(variableAssignment) => Right(variableAssignment.dataType)
       }
   }

@@ -3,10 +3,11 @@ package gb.kiama.dsl
 import gb.kiama.dsl.MyTree._
 import org.bitbucket.inkytonik.kiama.attribution.UncachedAttribution.attr
 import org.bitbucket.inkytonik.kiama.rewriting.{Rewriter, Strategy}
+import org.bitbucket.inkytonik.kiama.util.Positions
 
 import scala.reflect.ClassTag
 
-class MyTreeManipulations(tree: MyTree) extends Rewriter {
+class MyTreeManipulations(tree: MyTree)(implicit val positions: Positions) extends Rewriter {
   val getParents: TreeNode => Seq[TreeNode] =
     attr {
       case tree.parent(p) => p +: getParents(p)
@@ -45,7 +46,6 @@ class MyTreeManipulations(tree: MyTree) extends Rewriter {
     getReferencesVariableAssignment(node).collectFirst { case variableAssignment: VariableAssignmentStatement =>
       variableAssignment.exp
     }
-
   }
 
   val getReferencesVariableAssignment: LocalVariableReferenceExpression => Seq[VariableAssignment] = attr { node: LocalVariableReferenceExpression =>
@@ -58,18 +58,26 @@ class MyTreeManipulations(tree: MyTree) extends Rewriter {
     getRightSiblings(node).flatMap(sibling => getNodes[LocalVariableReferenceExpression](sibling).filter(_.referenceName == node.variableName))
   }
 
-  val reduceBinaryAndUnaryExpressionStrategy: Strategy = rule[TreeNode] {
-    case binaryExpression: BinaryExpression => binaryExpression.reduce
-    case unaryExpression: UnaryExpression   => unaryExpression.reduce
+  private def replaceNodeAndTrackPositions[I <: TreeNode, O <: TreeNode](originalNode: I, replaceFunction: I => O): O = {
+    val replacements = replaceFunction(originalNode)
+    positions.dupPos(originalNode, replacements)
+    replacements
   }
 
-  val replaceLocalVariableReferencesStrategy: Strategy = strategy[TreeNode] { case localVarRef: LocalVariableReferenceExpression =>
+  val reduceBinaryAndUnaryExpressionStrategy: Strategy = rule[TreeNode] {
+    case binaryExpression: BinaryExpression =>
+      replaceNodeAndTrackPositions[BinaryExpression, Expression](binaryExpression, _.reduce)
+    case unaryExpression: UnaryExpression =>
+      replaceNodeAndTrackPositions[UnaryExpression, Expression](unaryExpression, _.reduce)
+  }
+
+  val replaceLocalVariableReferencesStrategy: Strategy = strategy[Expression] { case localVarRef: LocalVariableReferenceExpression =>
     getReferencedVariableAssignmentExpression(localVarRef)
   }
 
-  val resolveUnariesAndBinaries: Root = rewrite(bottomup(reduceBinaryAndUnaryExpressionStrategy <+ id))(tree.root)
+  def resolveUnariesAndBinaries: Root = rewrite(bottomup(reduceBinaryAndUnaryExpressionStrategy <+ id))(tree.root)
 
-  val resolveLocalVariables: Root = rewrite(reduce(replaceLocalVariableReferencesStrategy))(tree.root)
+  def resolveLocalVariables: Root = rewrite(reduce(replaceLocalVariableReferencesStrategy))(tree.root)
 
   def getUsedVariableAssignments(expression: Expression = tree.root.returnStatement.expression): Seq[VariableAssignment] =
     getNodes[LocalVariableReferenceExpression](expression).flatMap { localVarRef =>
@@ -94,7 +102,8 @@ class MyTreeManipulations(tree: MyTree) extends Rewriter {
         variableAssignment.exp.getReturnType(getAllLocalVariablesInScope(variableAssignment)) match {
           case Left(validationMessages)                                   => validationMessages
           case Right(dataType) if dataType == variableAssignment.dataType => ValidationMessages.empty
-          case Right(dataType)                                            => ValidationMessages(s"Expression returns a $dataType, but local variable assignment actually expects a ${variableAssignment.dataType}")
+          case Right(dataType) =>
+            ValidationMessages(s"Expression returns a $dataType, but local variable assignment actually expects a ${variableAssignment.dataType}", Error, variableAssignment)
         }
       }
   )
@@ -113,14 +122,14 @@ class MyTreeManipulations(tree: MyTree) extends Rewriter {
   def getUnusedAssignments: ValidationMessages =
     ValidationMessages.concatenate(getNodes[VariableAssignment]().map { assignment =>
       val referencingLocalVarRefs = getLocalVariableReferencesPointingToAssignment(assignment)
-      if (referencingLocalVarRefs.isEmpty) ValidationMessages(s"assignment ${PrettyPrinter.format(assignment).layout} is never used.")
+      if (referencingLocalVarRefs.isEmpty) ValidationMessages(s"assignment is never used.", Warning, assignment)
       else ValidationMessages.empty
     })
 
   def findLocalVarRefsWithoutOrigin: ValidationMessages =
     ValidationMessages.concatenate(getNodes[LocalVariableReferenceExpression]().map { localVarRef =>
       val referencedExpressions = getReferencedVariableAssignmentExpression(localVarRef)
-      if (referencedExpressions.isEmpty) ValidationMessages(s"local variable reference '${localVarRef.referenceName}' does not point to any assignment")
+      if (referencedExpressions.isEmpty) ValidationMessages(s"local variable reference '${localVarRef.referenceName}' does not point to any assignment", Error, localVarRef)
       else ValidationMessages.empty
     })
 
@@ -130,7 +139,7 @@ class MyTreeManipulations(tree: MyTree) extends Rewriter {
         case siblingAssignment: VariableAssignment if siblingAssignment.variableName == assignment.variableName =>
           siblingAssignment
       }
-      if (assignmentsWithSameNameInScope.isEmpty) ValidationMessages(s"there are multiple assignments with name '${assignment.variableName}' in scope")
+      if (assignmentsWithSameNameInScope.isEmpty) ValidationMessages(s"there are multiple assignments with name '${assignment.variableName}' in scope", Error, assignment)
       else ValidationMessages.empty
     })
 

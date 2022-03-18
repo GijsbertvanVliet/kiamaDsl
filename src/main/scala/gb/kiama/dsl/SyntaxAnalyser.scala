@@ -3,7 +3,7 @@ package gb.kiama.dsl
 import org.bitbucket.inkytonik.kiama.parsing.Parsers
 import org.bitbucket.inkytonik.kiama.util.Positions
 
-class SyntaxAnalyser(positions: Positions) extends Parsers(positions) {
+class SyntaxAnalyser(implicit positions: Positions) extends Parsers(positions) {
   import MyTree._
 
   lazy val rootParser: Parser[Root] =
