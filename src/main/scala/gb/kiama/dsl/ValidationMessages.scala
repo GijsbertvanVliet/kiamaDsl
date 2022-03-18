@@ -15,12 +15,17 @@ object ValidationMessages {
   def apply(message: String, errorLevel: ValidationErrorLevel, node: TreeNode)(implicit positions: Positions): ValidationMessages = ValidationMessages(
     Seq(ValidationMessage(message, errorLevel, node))
   )
+  def apply(message: String, errorLevel: ValidationErrorLevel)(implicit positions: Positions): ValidationMessages = ValidationMessages(
+    Seq(ValidationMessage(message, errorLevel, None))
+  )
   def empty: ValidationMessages = ValidationMessages(Seq.empty)
   def concatenate(validations: Seq[ValidationMessages]): ValidationMessages =
     validations.foldLeft(ValidationMessages.empty)((prevValidationMessages, nextValidationMessages) => prevValidationMessages ++ nextValidationMessages)
 }
 case class ValidationMessages(messages: Seq[ValidationMessage]) {
   def ++(next: ValidationMessages): ValidationMessages = ValidationMessages(messages ++ next.messages)
+
+  def containsError: Boolean = messages.exists(_.errorLevel == Error)
 
   override def toString: String = messages.mkString(s";${System.lineSeparator}")
 }

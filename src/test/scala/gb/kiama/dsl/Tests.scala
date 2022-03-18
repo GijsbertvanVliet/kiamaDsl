@@ -138,18 +138,18 @@ class Tests extends AnyFlatSpec with Matchers {
 
   it should "find faulty local variable references" in {
     runTestOnDifferentTree { (positions, manipulations) =>
-      manipulations.findLocalVarRefsWithoutOrigin.toString shouldBe "Error => local variable reference 'input' does not point to any assignment; origin=input"
+      manipulations.findLocalVarRefsWithoutOrigin.toString shouldBe "Error => local variable reference 'blub' does not point to any assignment; origin=blub"
     }(
       """root (input: Int) {
         |    val a: String = "something";
-        |    return input;
+        |    return blub;
         |}""".stripMargin
     )
   }
 
   it should "create validations for duplicate defined local variable assignments" in {
     runTestOnDifferentTree { (_, manipulations) =>
-      manipulations.findDuplicateVariableAssignments.toString shouldBe "Error => there are multiple assignments with name 'input' in scope; origin=val input: String = \"something\";"
+      manipulations.findDuplicateVariableAssignments.toString shouldBe "Error => there are multiple assignments with name 'input' in scope; origin=input: Int"
     }(
       """root (input: Int) {
         |    val input: String = "something";
@@ -164,5 +164,60 @@ class Tests extends AnyFlatSpec with Matchers {
     val treeWithRemovedUnusedVariables = removeUnusedStatements
     treeWithRemovedUnusedVariables.inputArguments should contain theSameElementsAs Seq(inputArgument1)
     treeWithRemovedUnusedVariables.statements should contain theSameElementsAs Seq(variableAssignmentA, variableAssignmentC)
+  }
+
+  it should "correctly evaluate root with correct input arguments" in {
+    val dsl =
+      """
+        |root (input: Int) {
+        |  val inputTwice: Int = input + input;
+        |  val notUsed: String = "this is redundant";
+        |  return inputTwice + -3;
+        |}
+        |""".stripMargin
+
+    val (validations, result) = ApplicationExecuter.executeApplication(dsl, Seq(5))
+    validations shouldBe "Warning => assignment is never used.; origin=val notUsed: String = \"this is redundant\";"
+    result shouldBe Some(7)
+  }
+
+  it should "fail to evaluate root whenever validation errors are encountered" in {
+    val dsl =
+      """
+        |root(input: Int) {
+        |  val assignment: String = input;
+        |  return assignment + assignment;
+        |}
+        |""".stripMargin
+
+    val (validations, result) = ApplicationExecuter.executeApplication(dsl, Seq(3))
+    validations shouldBe "Error => Expression returns a IntegerType, but local variable assignment actually expects a StringType; origin=val assignment: String = input;"
+    result shouldBe None
+  }
+
+  it should "fail to evaluate root whenever incorrect amount of input arguments are given" in {
+    val dsl =
+      """
+        |root(input: Int) {
+        |  return input;
+        |}
+        |""".stripMargin
+
+    val (validations, result) = ApplicationExecuter.executeApplication(dsl, Seq(1, 2))
+    validations shouldBe "Error => Defined 2 input arguments where 1 were expected."
+    result shouldBe None
+  }
+
+  it should "fail to evaluate root whenever given input arguments don't have the correct data type" in {
+    val dsl =
+      """
+        |root(firstInput: String, secondInput: String) {
+        |  return firstInput + secondInput;
+        |}
+        |""".stripMargin
+
+    val (validations, result) = ApplicationExecuter.executeApplication(dsl, Seq(1, 2))
+    validations shouldBe "Error => Expected a StringType input argument, but a Integer was given;\nError => Expected a StringType input argument, but a Integer was given"
+    result shouldBe None
   }
 }

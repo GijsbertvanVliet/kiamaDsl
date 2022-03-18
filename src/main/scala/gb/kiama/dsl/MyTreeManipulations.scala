@@ -128,8 +128,8 @@ class MyTreeManipulations(tree: MyTree)(implicit val positions: Positions) exten
 
   def findLocalVarRefsWithoutOrigin: ValidationMessages =
     ValidationMessages.concatenate(getNodes[LocalVariableReferenceExpression]().map { localVarRef =>
-      val referencedExpressions = getReferencedVariableAssignmentExpression(localVarRef)
-      if (referencedExpressions.isEmpty) ValidationMessages(s"local variable reference '${localVarRef.referenceName}' does not point to any assignment", Error, localVarRef)
+      val referencedAssignments = getReferencesVariableAssignment(localVarRef)
+      if (referencedAssignments.isEmpty) ValidationMessages(s"local variable reference '${localVarRef.referenceName}' does not point to any assignment", Error, localVarRef)
       else ValidationMessages.empty
     })
 
@@ -139,8 +139,8 @@ class MyTreeManipulations(tree: MyTree)(implicit val positions: Positions) exten
         case siblingAssignment: VariableAssignment if siblingAssignment.variableName == assignment.variableName =>
           siblingAssignment
       }
-      if (assignmentsWithSameNameInScope.isEmpty) ValidationMessages(s"there are multiple assignments with name '${assignment.variableName}' in scope", Error, assignment)
-      else ValidationMessages.empty
+      if (assignmentsWithSameNameInScope.isEmpty) ValidationMessages.empty
+      else ValidationMessages(s"there are multiple assignments with name '${assignment.variableName}' in scope", Error, assignment)
     })
 
   //</editor-fold>
